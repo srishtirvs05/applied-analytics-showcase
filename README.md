@@ -13,7 +13,7 @@ Welcome to my portfolio of applied data science and analytics projects. This rep
 - **Techniques Applied:** Exploratory data analysis, multicollinearity checks, linear regression, decision trees, SVM, ensemble learning
 - **Key Takeaway:** Identified building compactness and overall height as top predictors; Random Forest and Decision Trees achieved ~98% prediction accuracy
 - **Business Impact:** Offers data-backed recommendations for optimizing building design to reduce energy consumption
-- **Project Folder:** [`Project1_BuildingHeatingPrediction`](./Project1_BuildingHeatingPrediction)
+- **Project Folder:** [(https://github.com/srishtirvs05/applied-analytics-showcase/tree/main/Predicting%20Heating%20Load%20for%20Energy%20Efficient%20Buildings%20Using%20Machine%20Learning))]
 
 
 ---
