@@ -25,7 +25,7 @@ Welcome to my portfolio of applied data science and analytics projects. This rep
 - **Techniques Applied:** Data merging, weather normalization, regression modeling, and interactive dashboard creation (Shiny)
 - **Key Takeaway:** Energy demand was driven primarily by outdoor temperature, insulation quality, and AC system type
 - **Business Impact:** Provides utility companies with actionable insights for demand-side management and consumer targeting
-- **Project Folder:** [`Project2_CarolinasEnergyAnalysis`](./Project2_CarolinasEnergyAnalysis)
+- **Project Folder:** [(https://github.com/srishtirvs05/applied-analytics-showcase/tree/main/Energy%20Usage%20in%20the%20Carolinas)]
 
 
 ---
