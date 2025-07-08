@@ -1,0 +1,759 @@
+---
+title: "Final Project"
+output: html_notebook
+---
+
+Library Packages 
+
+```{r}
+#install.packages("ggplot2")
+library(ggplot2)
+#install.packages("psych",dependencies = TRUE)
+library(psych)
+#install.packages(c("tidyverse", "tidyquant", "ggthemes", "rpart", "rpart.plot", "randomForest", "ISLR2", "corrplot"))
+library(tidyverse)
+library(tidyquant)
+library(ggplot2)
+library(ggthemes)
+library(rpart)
+library(rpart.plot)
+library(randomForest)
+library(ISLR2)
+#install.packages("corrplot")
+library(corrplot)
+
+
+
+```
+
+Removing Y2 (cooling)
+
+```{r}
+House_energy <- House_energy %>% 
+select(-Y2)
+```
+
+#############################
+###################### Histograms #######################
+#################################
+```{r}
+library(ggplot2)
+
+# Assuming 'df' is your dataframe
+# Loop through each of the columns in the dataframe
+histograms <- lapply(names(House_energy), function(column_name) {
+  # Check if the column is numeric
+  if(is.numeric(House_energy[[column_name]])) {
+    # Create the histogram with ggplot
+    p <- ggplot(House_energy, aes_string(x = column_name)) + 
+      geom_histogram(bins = 30, fill = "RED", color = "black") +
+      ggtitle(paste("Histogram of", column_name)) +
+      xlab(column_name) +
+      ylab("Frequency")
+    
+    # Print the plot
+    print(p)
+  }
+})
+```
+###################################################
+######### Correlation Plot ###########################
+############################################
+
+```{r}
+
+House_energy <- House_energy[,c("X1", "X2", "X3", "X4","X5","X6","X7","X8","Y1")]
+
+corr_plot<-pairs.panels(House_energy[], digits = 3, pch = 21, lm=TRUE, ellipses = FALSE)
+corr_plot
+
+
+
+cor_matrix<-cor(House_energy[,c("X1", "X2", "X3", "X4","X5","X6","X7","X8","Y1")], use="complete")
+
+corrplot(cor_matrix, method = "circle", type = "upper", 
+         tl.col = "black", tl.srt = 50, 
+         addCoef.col = "black", # Add correlation coefficients
+         number.cex = 0.7)      # Size of the coefficients
+```
+```{r}
+
+library(ggplot2)
+library(reshape2) # for melt function
+
+cor_melted <- melt(cor_matrix)
+ggplot(cor_melted, aes(Var1, Var2, fill = value)) +
+  geom_tile() +
+  scale_fill_gradient2(low = "blue", high = "red", mid = "grey", midpoint = 0) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+#####################################################
+########## Creating Dummy Variables ################
+##########################################################
+
+```{r}
+# Assuming 'df' is your dataframe and the column with orientations is named "X6_Orientation"
+House_energy <- House_energy %>%
+  mutate(North_Binary = ifelse(X6 == 2, 1, 0),
+         East_Binary = ifelse(X6 == 3, 1, 0),
+         South_Binary = ifelse(X6 == 4, 1, 0))
+
+
+House_energy <- House_energy %>%
+  mutate(Unknown_Binary_ga = ifelse(X8 == 0, 1, 0),
+         Uniform_Binary_ga= ifelse(X8== 1, 1, 0),
+         North_Binary_ga = ifelse(X8== 2, 1, 0),
+         East_Binary_ga = ifelse(X8 == 3, 1, 0),
+         South_Binary_ga = ifelse(X8 == 4, 1, 0))
+
+head(House_energy)
+
+```
+
+####################################
+########### REMOVING UNWANTED VARIABLES ###################
+
+```{r}
+House_energy <- House_energy %>%
+  select(-X6,-X8)
+
+
+```
+```{r}
+head(House_energy)
+```
+################                  #########
+################ LINEAR REGRESSION ##################
+###############                    ################
+
+```{r}
+
+############# Linear Regression ##########
+
+
+linearwine <- lm(Y1 ~., data = House_energy)
+summary(linearwine)
+
+```
+
+```{r}
+ggplot(House_energy, aes(x = X1 +X2+X3+X4+X5+North_Binary+East_Binary+South_Binary+X7+Unknown_Binary_ga+Uniform_Binary_ga+North_Binary_ga+East_Binary_ga+South_Binary_ga, y = Y1)) + 
+  geom_point() + 
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  scale_y_log10() +  # Applying log transformation on y-axis
+  ggtitle("Linear Regression") +
+  ggtitle("Linear Regression ") +
+  xlab("explanatory Variables") +
+  ylab("HEATING")
+```
+
+
+
+################            #####################
+################ V.  I    F #######################
+################            ##################
+
+
+```{r}
+######### VIF #######
+
+selected_columns1 <- House_energy[,c("X1", "X2", "X3","X4","X5","North_Binary","East_Binary","South_Binary","Unknown_Binary_ga","Uniform_Binary_ga","North_Binary_ga","East_Binary_ga","South_Binary_ga","Y1")]
+
+#install.packages("car",dependencies = TRUE)
+library(car) 
+linearmodel1 <- lm(Y1~.,data = House_energy)
+linearmodel1 <- update(linearmodel1, . ~ . - X4)
+viftable1<- vif(linearmodel1)
+viftable1
+sorttable1 <- sort(viftable1,decreasing=TRUE)
+sorttable1
+sorttable1[sorttable1 >10]
+```
+#######################              #####################
+##################   QUARTILES ####################
+#################                 ######################
+
+```{r}
+############ QUARTILES #################
+
+# Assuming your dataframe is 'df' and the Y-variable is 'Y'
+
+# Calculate quartiles
+heat_quartiles <- quantile(House_energy$Y1, probs = c(0, 0.25, 0.5, 0.75, 1))
+
+# Assign categories based on quartiles
+House_energy$Y1_quartile <- cut(House_energy$Y1, 
+                     breaks = heat_quartiles, 
+                     labels = c("D", "C", "B", "A"), 
+                     include.lowest = TRUE)
+
+# See the distribution of categories
+table(House_energy$Y1_quartile)
+
+
+```
+
+##################### @@@@@@@@@@@@@@@@@@@@@@ ###################
+####################
+#################### PERCEPTRONS #########################
+#####################            ##################
+#################@@@@@@@@@@@@@@@@@@@@@@@###################
+
+
+```{r}
+# Assuming you've already calculated the quartiles and created the Y1_quartile column
+House_energy$Y1_category <- ifelse(House_energy$Y1_quartile %in% c("A", "B"), 1, -1)
+House_energy
+```
+```{r}
+#### Perceptron ####
+
+Per_groups<-House_energy[,c("X1", "X2", "X3","X4","X5","North_Binary","East_Binary","South_Binary", "X7", "Unknown_Binary_ga","Uniform_Binary_ga","North_Binary_ga","East_Binary_ga","South_Binary_ga","Y1_category")]
+
+head(Per_groups)
+
+category_index <- sample(nrow(Per_groups), 0.7 * nrow(Per_groups))
+category_train <- Per_groups[category_index, ]
+category_test <- Per_groups[-category_index, ]
+
+category_train <- na.omit(category_train) # Remove any rows with NA values
+X <- category_train # Input Matrix
+y <- category_test$Y1_category # Output Vector
+
+perceptron <- function(X, y, numEpochs) {
+ results <- list()
+ w <- runif(ncol(X), -10, 10) #Initalize weights
+
+ # For loop - number of generations(epochs) - number of times dataset is ran through
+ for(j in 1:numEpochs) {
+ predictedResult <- numeric(length=100) # Initalize predictedResult vector
+ numIncorrect = 0 # Keeps track of # of missclassified points
+
+ # For loop - loop throught dataset
+ for(i in 1:length(y)) {
+ xi = as.numeric(unlist(X[i,])) # Convert dataframe to vector
+ predictedResult[i] = sign(w %*% xi) # Predict the point
+
+ # If predicted point is incorrect - change weight
+ if(predictedResult[i] != y[i]) {
+ numIncorrect = numIncorrect + 1 # Add one to # of missclassified points
+ w <- w + as.numeric(y[i]) * xi # Update the weight w <- w + WiXi
+ }
+ }
+ # Print results of this generation(epoch)
+ cat("\nEpoch #: ", j)
+ cat("\nNumber Incorrect: ", numIncorrect)
+ cat("\nFinal Weight: ", w)
+ }
+}
+
+perceptron(X,y, 5)
+
+
+```
+```{r}
+# Example weights for each epoch, you should replace these with actual weights from each epoch
+weights_list <- list(
+  c(9.424997, -269.5012, 175.9448, -220.4377, 12.34045, 10.24791, -1.936771, 8.321731, -8.992933, 2.801928, -5.155323, -7.737524, 7.804407, -8.171117, 1.07237),
+  c(9.894997, -588.0012, 445.4448, -514.4377, 22.84045, 10.24791, -4.936771, 11.32173, -9.992933, 3.801928, -4.155323, -6.737524, 9.804407, -9.171117, 5.07237),
+  c(10.095, -661.5012, 812.9448, -734.9377, 29.84045, 11.24791, -7.936771, 14.32173, -10.69293, 4.801928, -3.155323, -5.737524, 12.80441, -9.171117, 7.07237),
+  c(10.295, -735.0012, 1180.445, -955.4377, 36.84045, 12.24791, -10.93677, 17.32173, -11.39293, 5.801928, -2.155323, -4.737524, 15.80441, -9.171117, 9.07237),
+  c(10.535, -808.5012, 1253.945, -1028.938, 40.34045, 13.24791, -14.93677, 20.32173, -11.94293, 6.801928, -3.155323, -2.737524, 18.80441, -9.171117, 9.07237)
+)
+
+# Assuming category_test dataset is already loaded and properly formatted
+features <- c("X1", "X2", "X3", "X4", "X5", "North_Binary", "East_Binary", "South_Binary", "X7", "Unknown_Binary_ga", "Uniform_Binary_ga", "North_Binary_ga", "East_Binary_ga", "South_Binary_ga")
+
+# Calculate predictions and accuracy for each epoch
+for (i in seq_along(weights_list)) {
+  weight <- weights_list[[i]]
+  
+  # Applying weights to the test features
+  predictions <- category_test %>% 
+    mutate(across(all_of(features), ~ . * weight[match(cur_column(), features)], .names = "W{col}")) %>%
+    rowwise() %>%
+    mutate(predict = sum(c_across(starts_with("W")))) %>%
+    ungroup()
+
+  # Compute the prediction table
+  perceptronpredicttable <- table(predictions$Y1_category == 1, predictions$predict > 0) + 
+                            table(predictions$Y1_category == -1, predictions$predict < 0)
+
+  # Calculate accuracy
+  accuracy <- sum(diag(perceptronpredicttable)) / sum(perceptronpredicttable)
+  
+  # Print accuracy
+  cat(sprintf("\nAccuracy Perceptron %d: %f\n", i, accuracy))
+}
+```
+
+
+
+
+```{r}
+# Perceptron function definition
+perceptron <- function(X, y, numEpochs) {
+  w <- runif(ncol(X), -1, 1) # Initialize weights
+
+  # Loop for the specified number of epochs
+  for(j in 1:numEpochs) {
+    numIncorrect = 0 # Keeps track of number of misclassified points
+
+    # Loop through each data point
+    for(i in 1:nrow(X)) {
+      xi <- as.numeric(unlist(X[i,])) # Convert row to numeric vector
+      if (all(!is.na(xi))) { # Check to ensure no NA values in xi
+        pred <- sign(sum(w * xi)) # Predict the point
+
+        # If predicted point is incorrect - adjust weight
+        if(!is.na(pred) && pred != y[i]) {
+          numIncorrect <- numIncorrect + 1 # Increment misclassification count
+          w <- w + y[i] * xi # Update the weights
+        }
+      }
+    }
+
+    # Print results of this epoch
+    cat("\nEpoch #: ", j)
+    cat("\nNumber Incorrect: ", numIncorrect)
+    cat("\nFinal Weight: ", w)
+  }
+}
+
+# Pre-process data to ensure no NA values
+category_train <- na.omit(category_train) # Remove any rows with NA values
+X <- category_train # Input Matrix
+y <- category_train$Y1_category # Output Vector
+
+
+  perceptron(X, y, 5)
+
+```
+
+
+```{r}
+# Example weights for each epoch, you should replace these with actual weights from each epoch
+weights_list <- list(
+  c(10.97363, -1150.866, 3110.674, -2131.703, 161.4267, -0.3338043, 5.318697, 1.291617, 5.269896, -9.852594, 5.437399, 0.6196754, 6.080966, 4.876297, 101.6766),
+  c(14.28363, -1346.866, 3919.174, -2633.953, 206.9267, -0.3338043, 5.318697, 4.291617, 9.619896, -16.85259, 4.437399, 2.619675, 9.080966, 9.876297, 149.6766),
+  c(16.06363, -1542.866, 4409.174, -2976.953, 234.9267, -2.333804, 6.318697, 6.291617, 13.4699, -22.85259, 5.437399, 3.619675, 13.08097, 10.8763, 190.6766),
+  c(17.62363, -1542.866, 4899.174, -3221.953, 259.4267, -3.333804, 7.318697, 10.29162, 17.5699, -29.85259, 5.437399, 6.619675, 16.08097, 12.8763, 229.6766),
+  c(16.59363, -2008.366, 4923.674, -3466.953, 259.4267, -3.333804, 6.318697, 12.29162, 20.9199, -35.85259, 7.437399, 7.619675, 18.08097, 13.8763, 260.6766)
+)
+
+# Assuming category_test dataset is already loaded and properly formatted
+features <- c("X1", "X2", "X3", "X4", "X5", "North_Binary", "East_Binary", "South_Binary", "X7", "Unknown_Binary_ga", "Uniform_Binary_ga", "North_Binary_ga", "East_Binary_ga", "South_Binary_ga")
+
+# Calculate predictions and accuracy for each epoch
+for (i in seq_along(weights_list)) {
+  weight <- weights_list[[i]]
+  
+  # Applying weights to the test features
+  predictions <- category_test %>% 
+    mutate(across(all_of(features), ~ . * weight[match(cur_column(), features)], .names = "W{col}")) %>%
+    rowwise() %>%
+    mutate(predict = sum(c_across(starts_with("W")))) %>%
+    ungroup()
+
+  # Compute the prediction table
+  perceptronpredicttable <- table(predictions$Y1_category == 1, predictions$predict > 0) + 
+                            table(predictions$Y1_category == -1, predictions$predict < 0)
+
+  # Calculate accuracy
+  accuracy <- sum(diag(perceptronpredicttable)) / sum(perceptronpredicttable)
+  
+  # Print accuracy
+  cat(sprintf("\nAccuracy Perceptron %d: %f\n", i, accuracy))
+}
+```
+
+##################### @@@@@@@@@@@@@@@@@@@@@@ ###################
+####################
+#################### S.  V.  M.   #########################
+#####################            ##################
+#################@@@@@@@@@@@@@@@@@@@@@@@###################
+
+
+
+
+
+```{r}
+library(e1071)
+
+SVM_groups<-House_energy[,c("X1", "X2", "X3","X4","X5","North_Binary","East_Binary","South_Binary", "X7", "Unknown_Binary_ga","Uniform_Binary_ga","North_Binary_ga","East_Binary_ga","South_Binary_ga","Y1_quartile")]
+
+head(SVM_groups)
+
+category_index1 <- sample(nrow(SVM_groups), 0.7 * nrow(SVM_groups))
+category_train1 <- SVM_groups[category_index1, ]
+category_test1 <- SVM_groups[-category_index1, ]
+
+svm <- svm(Y1_quartile ~ . , data= category_train1)
+print(svm)
+summary(svm)
+
+
+svmpredict <- predict(svm, newdata = category_train1[,-15], type = "response")
+
+#install.packages("caret")
+library(caret)
+confusionMatrix(svmpredict,category_train1$Y1_quartile)
+
+
+```
+```{r}
+
+# Perform PCA on the training set, omitting the target variable column
+pca <- prcomp(category_train1[, -15], center = TRUE, scale. = TRUE)
+category_train_pca <- data.frame(pca$x[, 1:2], Y1_quartile = category_train1$Y1_quartile)
+
+# Re-train SVM on the first two principal components for visualization
+svm_pca <- svm(Y1_quartile ~ ., data = category_train_pca)
+
+# Function to plot SVM decision boundaries for each quartile
+plot_svm_for_quartile <- function(quartile, xlabel, ylabel) {
+  data_quartile <- subset(category_train_pca, Y1_quartile == quartile)
+  
+  # Plot the decision boundary for the SVM model on PCA-reduced data
+  plot(svm_pca, data_quartile, PC1 ~ PC2,
+       main = sprintf("SVM Decision Boundary - Quartile '%s'", quartile),
+       xlab = xlabel, ylab = ylabel)
+}
+
+# Setup plotting area for 4 plots (2x2 grid)
+par(mfrow=c(2,2))
+
+# Quartiles
+quartiles <- c("A", "B", "C", "D")
+
+xlabel <- "X 1"
+ylabel <- "X 2"
+
+
+# Generate plots for each quartile
+for (quartile in quartiles) {
+  cat("\nPlotting SVM Decision Boundary for Quartile:", quartile, "\n")
+  plot_svm_for_quartile(quartile, xlabel, ylabel)
+}
+```
+
+##################### @@@@@@@@@@@@@@@@@@@@@@ ###################
+####################
+#################### N.   N.   #########################
+#####################            ##################
+#################@@@@@@@@@@@@@@@@@@@@@@@###################
+
+
+
+```{r}
+
+#####################################################
+NN_groups<-House_energy[,c("X1", "X2", "X3","X4","X5","North_Binary","East_Binary","South_Binary", "X7", "Unknown_Binary_ga","Uniform_Binary_ga","North_Binary_ga","East_Binary_ga","South_Binary_ga","Y1")]
+
+normalize <- function(x) {return((x-min(x))/(max(x)-min(x)))}
+house_norm <- as.data.frame(lapply(NN_groups,normalize))
+
+```
+
+
+```{r}
+
+set.seed(17)
+NN_index1 <- sample(nrow(house_norm), 0.7 * nrow(house_norm) ,replace = FALSE)
+NN_train1 <- house_norm [NN_index1, ]
+NN_test1 <- house_norm [-NN_index1, ]
+
+#install.packages("neuralnet", dependencies = TRUE)
+library(neuralnet)
+
+cur_max_list <- list()
+for (layer_one in 1:5){
+ concrete_model <- neuralnet(Y1 ~ X1 +X2+X3+X4+X5+North_Binary+East_Binary+South_Binary+X7+Unknown_Binary_ga+Uniform_Binary_ga+North_Binary_ga+East_Binary_ga+South_Binary_ga,
+data=NN_train1, hidden=layer_one, lifesign="minimal", linear.output=TRUE,
+threshold=0.1,stepmax=1e7)
+ concrete_results <- compute(concrete_model, NN_test1[1:14])
+ denormalize <- function(y,x){return(y*(max(x)-min(x))+min(x))}
+ concretedenorm <- denormalize(concrete_results$net.result, NN_groups$Y1)
+ actualstrength <- NN_groups$Y1[-NN_index1]
+ concretenet_correlation <- cor(concretedenorm,actualstrength)
+ print(concretenet_correlation)
+ cur_max_list[paste(layer_one)] <- concretenet_correlation
+}
+cur_max_list[which.max(sapply(cur_max_list,max))]
+```
+
+
+
+
+##################### @@@@@@@@@@@@@@@@@@@@@@ ###################
+####################
+#################### Knearest  #########################
+#####################            ##################
+#################@@@@@@@@@@@@@@@@@@@@@@@###################
+
+
+
+
+```{r}
+
+#install.packages("class")
+library(class)
+#install.packages("gmodels")
+library(gmodels)
+library(caret)
+
+Knear_col<-House_energy[,c("X1", "X2", "X3","X4","X5","North_Binary","East_Binary","South_Binary", "X7", "Unknown_Binary_ga","Uniform_Binary_ga","North_Binary_ga","East_Binary_ga","South_Binary_ga","Y1_quartile")]
+
+
+table(Knear_col$Y1_quartile)
+Knear_col$Y1_quartile <- factor(Knear_col$Y1_quartile, levels=c("A","B","C","D"),
+labels=c("A","B","C","D"))
+
+Knear_col[1:14]
+```
+
+
+```{r}
+
+normalize <- function(x) {return((x-min(x))/(max(x)-min(x)))}
+knear_norm2 <- as.data.frame(lapply(Knear_col[1:14],normalize))
+
+set.seed(7)
+pak_index2 <- sample(nrow(knear_norm2), 0.7 * nrow(knear_norm2) ,replace = FALSE)
+pak_train2 <- knear_norm2 [pak_index2, ]
+pak_test2 <- knear_norm2 [-pak_index2, ]
+
+
+
+pak_train_labels <- Knear_col[pak_index2,15,drop=TRUE]
+pak_test_labels <- Knear_col[-pak_index2,15,drop=TRUE]
+
+set.seed(7)
+pak_test_pred <- knn(train = pak_train2, test = pak_test2,
+cl=pak_train_labels, k=3) 
+
+paktable <- CrossTable(x=pak_test_labels, y=pak_test_pred,
+prop.chisq=FALSE)
+
+sum(diag(paktable$prop.tbl))
+
+confusionMatrix(pak_test_pred,pak_test_labels)
+
+```
+
+
+##################### @@@@@@@@@@@@@@@@@@@@@@ ###################
+####################
+#################### Naive- BIAS #########################
+#####################            ##################
+#################@@@@@@@@@@@@@@@@@@@@@@@###################
+
+
+```{r}
+
+####################### Naive- BIAS ###################
+#install.packages("e1071",dependencies=TRUE)
+library(e1071)
+
+set.seed(7)
+pak_index2 <- sample(nrow(Knear_col), 0.7 * nrow(Knear_col) ,replace = FALSE)
+pak_train2 <- Knear_col [pak_index2, ]
+pak_test2 <- Knear_col [-pak_index2, ]
+
+
+
+set.seed(17)
+pak_model <- naiveBayes(Y1_quartile ~ X1 +X2+X3+X4+X5+North_Binary+East_Binary+South_Binary+X7+Unknown_Binary_ga+Uniform_Binary_ga+North_Binary_ga+East_Binary_ga+South_Binary_ga , data=pak_train2, laplace=1)
+
+pak_model
+
+pak_pred <- predict(pak_model, pak_test2[1:14], type="class")
+pak_pred_table <- table(pak_test2$Y1_quartile,pak_pred)
+pak_pred_table
+
+sum(diag(pak_pred_table))/sum(pak_pred_table)
+library(caret)
+confusionMatrix(pak_pred,pak_test2$Y1_quartile) 
+
+
+
+```
+
+##################### @@@@@@@@@@@@@@@@@@@@@@ ###################
+####################
+#################### Decisiion Treeee  #########################
+#####################            ##################
+#################@@@@@@@@@@@@@@@@@@@@@@@###################
+
+
+
+
+
+```{r}
+# Assuming you've already calculated the quartiles and created the Y1_quartile column
+House_energy$Y1_class <- ifelse(House_energy$Y1_quartile %in% c("A", "B"), 1, 0)
+House_energy
+House_energy$Y1_class  <- as.factor(House_energy$Y1_class )
+summary(House_energy)
+
+Class_col <- House_energy[,c("X1", "X2", "X3","X4","X5","North_Binary","East_Binary","South_Binary", "X7", "Unknown_Binary_ga","Uniform_Binary_ga","North_Binary_ga","East_Binary_ga","South_Binary_ga","Y1_class")]
+
+set.seed(7)
+index <- sample(nrow(Class_col), 0.7 * nrow(Class_col) ,replace = FALSE)
+train2 <- Class_col [index, ]
+test2 <- Class_col [-index, ]
+
+
+
+#install.packages("rpart.plot")
+#install.packages("rpart")
+library(rpart)
+library(rpart.plot)
+
+tree <- rpart(Y1_class~., data = train2, method = 'class')
+rpart.plot(tree,extra = 4) #extra = 4 shows prob per class
+
+treepredict <- predict(tree, test2[,1:14], type = 'class')
+
+#install.packages("caret")
+library("caret")
+confusionMatrix(treepredict, test2$Y1_class)
+```
+
+
+##################### @@@@@@@@@@@@@@@@@@@@@@ ###################
+####################
+#################### RANDOM FORESST  #########################
+#####################            ##################
+#################@@@@@@@@@@@@@@@@@@@@@@@###################
+
+
+
+
+
+```{r}
+#########################.  RANDOM FORESST ##################
+#install.packages("randomForest")
+library("randomForest")
+
+
+
+
+forest <- randomForest(Y1_class~., data = train2, ntree=500,
+proximity=TRUE, importance=TRUE)
+forest
+
+importance(forest)
+
+varImpPlot(forest)
+
+oob.error.data <- data.frame(
+ Trees=rep(1:nrow(forest$err.rate),times =3),
+ Type=rep(c("OOB", "0","1"),each=nrow(forest$err.rate)),
+ Error=c(forest$err.rate[,"OOB"],forest$err.rate[,"0"],
+ forest$err.rate[,"1"])
+)
+library(ggplot2)
+ggplot(data=oob.error.data,aes(x=Trees, y=Error))+geom_line(aes(color=Type))
+
+predict <- predict(forest, newdata = test2[,1:14], type =
+'class') 
+
+confusionMatrix(predict, test2$Y1_class)
+```
+  ##################### @@@@@@@@@@@@@@@@@@@@@@ ###################
+####################
+#################### BOOSTING  #########################
+#####################            ##################
+#################@@@@@@@@@@@@@@@@@@@@@@@###################
+
+
+```{r}
+################################ Boosting ##############
+
+#Class_col$Y1_class <- as.numeric(levels(Class_col$Y1_class )[ Class_col$Y1_class ])
+summary(Class_col$Y1_class ) 
+
+x_train <- as.matrix(Class_col[index,1:14])
+y_train <- Class_col[index,15,drop=TRUE]
+x_test <- as.matrix(Class_col[-index,1:14])
+y_test <- Class_col[-index,15,drop=TRUE]
+
+
+#install.packages("xgboost")
+library(xgboost)
+
+dtrain <- xgb.DMatrix(data = x_train, label = y_train)
+divorcexgb <- xgboost(data = dtrain, max.depth = 5, eta = 1, nthread = 2,
+ nrounds = 1000,objective = "binary:logistic",verbose = 0)
+
+xgb.plot.importance(xgb.importance(model = divorcexgb), measure = "Gain")
+
+ggplot(divorcexgb$evaluation_log) +
+ geom_line(aes(iter, train_logloss), color = "red") +
+scale_x_continuous(limits=c(0, 50))
+
+divorcepredict <- predict(divorcexgb, x_test)
+
+head(divorcepredict)
+
+divorcepredict <- as.numeric(divorcepredict > 0.5)
+head(divorcepredict)
+
+confusionMatrix(factor(divorcepredict),factor(y_test))
+```
+
+
+
+```{r}
+
+Knear_col<-House_energy[,c("X1", "X3","X4","North_Binary","East_Binary", "X7","Uniform_Binary_ga","Y1_quartile")]
+
+
+library(e1071)
+
+set.seed(7)
+pak_index2 <- sample(nrow(Knear_col), 0.7 * nrow(Knear_col) ,replace = FALSE)
+pak_train2 <- Knear_col [pak_index2, ]
+pak_test2 <- Knear_col [-pak_index2, ]
+
+
+
+set.seed(17)
+pak_model <- naiveBayes(Y1_quartile ~ X1 +X3+X4+North_Binary+East_Binary+X7+Uniform_Binary_ga , data=pak_train2, laplace=1)
+
+pak_model
+
+pak_pred <- predict(pak_model, pak_test2[1:7], type="class")
+pak_pred_table <- table(pak_test2$Y1_quartile,pak_pred)
+pak_pred_table
+
+sum(diag(pak_pred_table))/sum(pak_pred_table)
+library(caret)
+confusionMatrix(pak_pred,pak_test2$Y1_quartile) 
+
+
+
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+

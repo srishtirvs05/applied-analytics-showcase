@@ -1,0 +1,199 @@
+---
+title: "MLB final project"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+library(tidyverse)
+library(psych)
+#install.packages("corrplot")
+library(corrplot)
+
+##loading data and description
+summary(EnergyEfficiency)
+view(EnergyEfficiency)
+```
+
+
+```{r}
+#correlation matrix
+
+cor_matrix <- cor(EnergyEfficiency[,c("Relative Compactness","Surface Area","Wall Area","Roof Area","Overall Height","Orientation","Glazing Area",
+                  "Glazing Area Distribution","Heating Load")], use="complete")
+corrplot(cor_matrix, method = "circle", type = "upper", 
+tl.col = "black", tl.srt = 50, 
+addCoef.col = "black", # Add correlation coefficients
+number.cex = 0.7)    # Size of the coefficients
+ 
+#Calculate correlation matrix
+correlation_matrix <- cor(EnergyEfficiency)
+
+#Print correlation matrix
+print(correlation_matrix)
+
+#scatterplot matrix
+pairs.panels(EnergyEfficiency[1:9], digits = 3, pch = 21, lm=TRUE, ellipses = FALSE)
+
+# Visualize correlation matrix using corrplot
+corr_plot <- corrplot(correlation_matrix, method = "color", 
+         type = "upper", # Display upper part of the correlation matrix
+         #addCoef.col = "blue", # Add correlation coefficient values in black color
+         tl.col = "black", # Label color
+         tl.srt = 60) # Rotate the labels by 60 degrees
+         #title = "Correlation Matrix") # Title of the plot
+
+
+
+
+library(ggplot2)
+library(reshape2) # for melt function
+
+cor_melted <- melt(correlation_matrix)
+ggplot(cor_melted, aes(Var1, Var2, fill = value)) +
+  geom_tile() +
+  scale_fill_gradient2(low = "blue", high = "red", mid = "grey", midpoint = 0) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+
+```{r}
+#mutating dataset
+energy_efficiency <- EnergyEfficiency %>%
+  mutate(orientation_N = ifelse(Orientation == 2, 1,0),
+  orientation_E = ifelse(Orientation == 3, 1,0),
+  orientation_S = ifelse(Orientation == 4, 1,0),
+  glazing_dis_Unk = ifelse(`Glazing Area Distribution` == 0, 1,0),
+  glazing_dis_Uni = ifelse(`Glazing Area Distribution` == 1, 1,0),
+  glazing_dis_N = ifelse(`Glazing Area Distribution` == 2, 1,0),
+  glazing_dis_E = ifelse(`Glazing Area Distribution` == 3, 1,0),
+  glazing_dis_S = ifelse(`Glazing Area Distribution` == 4, 1,0))
+
+#removing of reference variables
+energy_efficiency <- energy_efficiency %>%
+  select(-Orientation, -`Glazing Area Distribution`)
+
+#linear regression
+reg_1 <- lm(`Heating Load` ~., data = energy_efficiency)
+summary(reg_1)
+
+#VIF analysis
+library(car)
+reg_1 <- update(reg_1,.~. -`Roof Area`)
+VIF_analysis <- vif(reg_1)
+VIF_analysis
+sorttable1 <- sort(VIF_analysis,decreasing=TRUE)
+sorttable1
+sorttable1[sorttable1 >10]
+```
+
+
+```{r}
+##Modeling analysis
+
+#part a
+quartiles <- quantile(energy_efficiency$`Heating Load`, probs = c(0, 0.25, 0.5, 0.75, 1), na.rm = TRUE)
+
+# Assign categories based on quartiles
+energy_efficiency$heating_quartile <- cut(energy_efficiency$`Heating Load`, breaks = quartiles, labels = c("D", "C", "B", "A"), include.lowest = TRUE)
+
+# Print the summary of categories
+table(energy_efficiency$heating_quartile)
+```
+
+
+```{r}
+#part b
+# Convert categories A & B to 1, and categories C & D to -1 after creating quartile groups
+energy_efficiency$heating_quartile <- ifelse(energy_efficiency$heating_quartile %in% c("A", "B"), 1, -1)
+energy_efficiency
+
+energy_efficiency_updated <- energy_efficiency[,c("Relative Compactness", "Surface Area", "Wall Area", "Roof Area", "Overall Height", "Overall Height", "Glazing Area", "orientation_N", "orientation_E", "orientation_S", "glazing_dis_Unk", "glazing_dis_Uni", "glazing_dis_N", "glazing_dis_E", "glazing_dis_S", "Heating Load")]
+
+# Create training and testing data
+category_index <- sample(nrow(energy_efficiency_updated), 0.7 * nrow(energy_efficiency_updated))
+category_train <- energy_efficiency_updated[category_index, ]
+category_test <- energy_efficiency_updated[-category_index, ]
+
+category_train <- na.omit(category_train) # Remove any rows with NA values
+
+X <- category_train # Input Matrix
+y <- category_test$`Heating Load` # Output Vector
+
+perceptron <- function(X, y, numEpochs) {
+ results <- list()
+ w <- runif(ncol(X), -10, 10) #Initalize weights
+
+ # For loop - number of generations(epochs) - number of times dataset is ran through
+ for(j in 1:numEpochs) {
+ predictedResult <- numeric(length=100) # Initalize predictedResult vector
+ numIncorrect = 0 # Keeps track of # of missclassified points
+
+ # For loop - loop throught dataset
+ for(i in 1:length(y)) {
+ xi = as.numeric(unlist(X[i,])) # Convert dataframe to vector
+ predictedResult[i] = sign(w %*% xi) # Predict the point
+
+ # If predicted point is incorrect - change weight
+ if(predictedResult[i] != y[i]) {
+ numIncorrect = numIncorrect + 1 # Add one to # of missclassified points
+ w <- w + as.numeric(y[i]) * xi # Update the weight w <- w + WiXi
+ }
+ }
+ # Print results of this generation(epoch)
+ cat("\nEpoch #: ", j)
+ cat("\nNumber Incorrect: ", numIncorrect)
+ cat("\nFinal Weight: ", w)
+ }
+}
+
+perceptron(X,y, 5)
+
+
+# Example weights for each epoch, you should replace these with actual weights from each epoch
+weights_list <- list(
+ c(4080.917, 3594335, 1690386, 951968.7, 27928.18,  27931.67, 1197.954, 1367.688, 1261.546, 1305.166, 355.8201, 1100.394, 1181.623, 784.7006, 1188.88, 118322.3),
+ c(8164.322, 7188661, 3380765, 1903942, 55865.53, 55869.02, 2386.731, 2736.058, 2524.596, 2615.176, 718.0101, 2196.214, 2355.843, 1578.131, 2381.6, 236643.6),
+ c(12247.73, 10782988, 5071144, 2855916, 83802.88, 83806.37, 3575.509, 4104.428, 3787.646, 3925.186, 1080.2, 3292.034, 3530.063, 2371.561, 3574.32, 354965),
+ c(16331.13, 14377314, 6761523, 3807890, 111740.2, 111743.7, 4764.286, 5472.798, 5050.696, 5235.196, 1442.39, 4387.854, 4704.283, 3164.991, 4767.04, 473286.3),
+ c(20414.53, 17971641, 8451902, 4759864, 139677.6, 139681.1, 5953.064, 6841.168, 6313.746, 6545.206, 1804.58, 5483.674, 5878.503, 3958.421, 5959.76, 591607.7)
+ )
+ 
+# Assuming category_test dataset is already loaded and properly formatted
+features <- c("Relative Compactness", "Surface Area", "Wall Area", "Roof Area", "Overall Height", "Overall Height", "Glazing Area", "orientation_N", "orientation_E", "orientation_S", "glazing_dis_Unk", "glazing_dis_Uni", "glazing_dis_N", "glazing_dis_E", "glazing_dis_S")
+
+# Calculate predictions and accuracy for each epoch
+ for (i in seq_along(weights_list)) {
+ weight <- weights_list[[i]]
+# Applying weights to the test features
+predictions <- category_test %>% 
+mutate(across(all_of(features), ~ . * weight[match(cur_column(), features)], .names 
+= "W{col}")) %>%
+ rowwise() %>%
+ mutate(predict = sum(c_across(starts_with("W")))) %>%
+ ungroup()
+# Compute the prediction table
+ perceptronpredicttable <- table(predictions$`Heating Load` == 1, predictions$predict > 0) 
++
+table(predictions$`Heating Load` == -1, predictions$predict < 0)
+# Calculate accuracy
+ accuracy <- sum(diag(perceptronpredicttable)) / sum(perceptronpredicttable)
+
+# Print accuracy
+ cat(sprintf("\nAccuracy Perceptron %d: %f\n", i, accuracy))
+}
+
+```
+```{r}
+
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
